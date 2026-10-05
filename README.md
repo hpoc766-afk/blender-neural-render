@@ -1,8 +1,10 @@
-# Neural Render Bridge
+# Blender Neural Render
+
+Blender 插件 / Blender extension: **Neural Render Bridge**.
 
 [中文](#中文) · [English](#english)
 
-[GitHub](https://github.com/hpoc766-afk/neural-render-bridge) · [Download / 下载](https://github.com/hpoc766-afk/neural-render-bridge/releases/latest)
+[GitHub](https://github.com/hpoc766-afk/blender-neural-render) · [Download / 下载](https://github.com/hpoc766-afk/blender-neural-render/releases/latest)
 
 ## 中文
 
@@ -110,7 +112,7 @@ blender --command extension build --source-dir . --output-dir dist
 blender --command extension validate dist/neural_render_bridge-0.2.0.zip
 ```
 
-安装包与 SHA-256 发布在本仓库的 [Releases](https://github.com/hpoc766-afk/neural-render-bridge/releases) 中。许可证为 GPL-3.0-or-later，见 `LICENSE`。
+安装包与 SHA-256 发布在本仓库的 [Releases](https://github.com/hpoc766-afk/blender-neural-render/releases) 中。许可证为 GPL-3.0-or-later，见 `LICENSE`。
 
 ## English
 
@@ -218,4 +220,4 @@ blender --command extension build --source-dir . --output-dir dist
 blender --command extension validate dist/neural_render_bridge-0.2.0.zip
 ```
 
-Installation archives and SHA-256 checksums are published in this repository's [Releases](https://github.com/hpoc766-afk/neural-render-bridge/releases). Licensed under GPL-3.0-or-later; see `LICENSE`.
+Installation archives and SHA-256 checksums are published in this repository's [Releases](https://github.com/hpoc766-afk/blender-neural-render/releases). Licensed under GPL-3.0-or-later; see `LICENSE`.
