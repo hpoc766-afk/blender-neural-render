@@ -50,7 +50,7 @@ if mode != 'baseline':
     injected.name = 'Identity HDR' if mode == 'identity' else 'PyTorch HDR before original compositor'
     injected.image = hdr
     for name, target, key in routes:
-        if name == 'Image':
+        if name == 'Image' and (not identity.get('neural_node') or target.node.name == identity['neural_node']):
             graph.links.new(injected.outputs['Image'], target)
 # Verify the actual remaining original node definitions and all non-source links.
 excluded = [proxy.name] + ([injected.name] if injected else [])
@@ -97,7 +97,11 @@ report = {'mode': mode, 'cache_session_id': manifest['capture_session_id'],
           'identity_sha256': manifest['identity_sha256'], 'cache_raw_sha256': manifest['assets']['raw_exr']['sha256'],
           'original_non_source_nodes_and_links_unchanged': True,
           'original_settings_unchanged': True, 'settings': original_settings,
-          'replaced_rgb_links': [key for name, target, key in routes if name == 'Image'] if injected else [],
+          'neural_node': identity.get('neural_node'),
+          'replaced_rgb_links': [key for name, target, key in routes if name == 'Image'
+                                and (not identity.get('neural_node') or target.node.name == identity['neural_node'])] if injected else [],
+          'passthrough_rgb_links': [key for name, target, key in routes if name == 'Image'
+                                   and identity.get('neural_node') and target.node.name != identity['neural_node']],
           'auxiliary_links': [key for name, target, key in routes if name != 'Image'],
           'actual_geometry_render_calls': PostprocessOnlyEngine.actual_render_calls,
           'wall_seconds': time.perf_counter() - started}

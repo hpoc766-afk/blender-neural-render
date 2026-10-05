@@ -18,6 +18,7 @@ def main():
     parser.add_argument('--scene')
     parser.add_argument('--frame', type=int)
     parser.add_argument('--view-layer')
+    parser.add_argument('--neural-node')
     parser.add_argument('--strength', type=float, default=1.0)
     parser.add_argument('--identity-only', action='store_true')
     parser.add_argument('--eager', action='store_true')

@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "neural_render_bridge"
-version = "0.1.0"
+version = "0.2.0"
 name = "Neural Render Bridge"
 tagline = "Process scene HDR before the original compositor"
 maintainer = "Neural Render Bridge contributors"
@@ -14,4 +14,4 @@ license = ["SPDX:GPL-3.0-or-later"]
 files = "Read models and write scene snapshots and render results"
 
 [build]
-paths_exclude_pattern = ["__pycache__/", "*.pyc", "/.git/", "/.gitignore", "/dist/", "/*.zip"]
+paths_exclude_pattern = ["__pycache__/", "*.pyc", "/.git/", "/.gitignore", "/dist/", "/reports/", "/tests/", "/*.zip"]

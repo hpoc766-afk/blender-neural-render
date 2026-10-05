@@ -3,13 +3,17 @@ import json
 import os
 from pathlib import Path
 import bpy
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from bridge_node import NODE_ID, bridge_node
 from frame_contract import CAPTURE_VERSION, digest, sha, write_json
 
 
 def scalar_properties(value):
     result = {}
     for prop in value.bl_rna.properties:
-        if prop.is_readonly or prop.type not in {'BOOLEAN', 'INT', 'FLOAT', 'STRING', 'ENUM'}:
+        if (prop.is_readonly or prop.type not in {'BOOLEAN', 'INT', 'FLOAT', 'STRING', 'ENUM'}
+                or getattr(value, 'bl_idname', None) == NODE_ID and prop.identifier == 'model_choice'):
             continue
         item = getattr(value, prop.identifier)
         if getattr(prop, 'is_array', False):
@@ -78,6 +82,8 @@ def load_request(directory):
     graph = scene.compositing_node_group
     def check_tree(tree):
         for node in tree.nodes:
+            if tree != graph and node.bl_idname == NODE_ID:
+                raise RuntimeError('unsupported_capability: Neural Render Bridge must be in the top-level compositor')
             if node.bl_idname.startswith('CompositorNodeCryptomatte'):
                 raise RuntimeError('unsupported_capability: Cryptomatte metadata-preserving capture is not implemented')
             if getattr(node, 'node_tree', None):
@@ -92,6 +98,7 @@ def load_request(directory):
     owner = raw.scene or scene
     if owner != scene:
         raise RuntimeError('unsupported_capability: cross-scene Render Layers sources')
+    node = bridge_node(graph, raw, request.get('neural_node'))
     layer = owner.view_layers.get(raw.layer)
     if not layer or not layer.use:
         raise RuntimeError('Render Layers refers to a missing or disabled View Layer')
@@ -132,10 +139,13 @@ def load_request(directory):
     width = scene.render.resolution_x * scene.render.resolution_percentage // 100
     code = {p.name: sha(p) for p in Path(__file__).parent.glob('*.py')
             if p.name in {'capture_raw.py', 'post_stage.py', 'blender_contract.py', 'frame_contract.py'}}
+    for name in ('bridge_node.py', 'blender_stage.py'):
+        code[name] = sha(Path(__file__).resolve().parents[2] / name)
     identity = {'version': CAPTURE_VERSION, 'source': str(Path(bpy.data.filepath).resolve()),
                 'source_sha256': sha(bpy.data.filepath), 'dependencies': dependencies,
                 'scene': scene.name, 'frame': scene.frame_current, 'subframe': scene.frame_subframe,
                 'camera': scene.camera.name, 'view_layer': layer.name, 'source_node': raw.name,
+                'neural_node': node.name if node else None,
                 'dimensions_hw': [height, width], 'alpha': 'premultiplied',
                 'blender_build': bpy.app.build_hash.decode(), 'blender_version': bpy.app.version_string,
                 'settings': scene_settings(scene), 'compositor': graph_state(graph), 'capture_code': code}

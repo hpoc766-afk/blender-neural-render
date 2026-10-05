@@ -8,9 +8,10 @@ import uuid
 import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, PointerProperty, StringProperty
 from .jobs import Job
+from .runtime.bridge_node import NRBCompositorNode, NODE_ID, bridge_node, node_checkpoint
 
 bl_info = {'name': 'Neural Render Bridge', 'author': 'Neural Render Bridge contributors',
-           'version': (0, 1, 0), 'blender': (5, 1, 0),
+           'version': (0, 2, 0), 'blender': (5, 1, 0),
            'location': 'Properties > Render > Neural Render Bridge',
            'description': 'Process scene HDR before the original compositor', 'category': 'Render'}
 
@@ -50,21 +51,26 @@ def start_job(context, check=False):
     if bpy.app.version[:2] != (5, 1):
         raise RuntimeError('Blender 5.1 is required')
     prefs = preferences(context)
-    settings = context.scene.neural_render_bridge
-    if not prefs.python_path or not prefs.model_source:
-        raise ValueError('Configure Python executable and model source in Preferences')
+    graph = context.scene.compositing_node_group
+    node = bridge_node(graph) if graph else None
+    if (context.space_data and context.space_data.type == 'NODE_EDITOR'
+            and context.space_data.edit_tree != graph):
+        raise ValueError('Use the active scene compositor for Neural Render Bridge')
+    settings = node or context.scene.neural_render_bridge
+    source_value = node.model_source if node else prefs.model_source
+    if not prefs.python_path or not source_value:
+        raise ValueError('Configure Python in Preferences and model source in the node or Preferences')
     python = resolved(prefs.python_path)
-    model_source = resolved(prefs.model_source)
+    model_source = resolved(source_value)
     if not python.is_file():
         raise ValueError('Python executable not found')
     if not (model_source / 'dlss5' / 'graph.py').is_file():
         raise ValueError('Model source must contain dlss5/graph.py')
     identity = settings.mode == 'IDENTITY'
-    if not identity and settings.strength > 0 and not prefs.checkpoint:
-        raise ValueError('Choose a checkpoint in Preferences')
-    checkpoint = resolved(prefs.checkpoint) if prefs.checkpoint else None
-    if not identity and settings.strength > 0 and not checkpoint.is_file():
-        raise ValueError('Checkpoint not found')
+    needs_model = not identity and settings.strength > 0
+    checkpoint = node_checkpoint(node) if node and needs_model else (resolved(prefs.checkpoint) if prefs.checkpoint and not node else None)
+    if needs_model and (checkpoint is None or not checkpoint.is_file()):
+        raise ValueError('Choose an existing compatible checkpoint in the node or Preferences')
     if prefs.output_root:
         root = resolved(prefs.output_root)
     else:
@@ -76,6 +82,8 @@ def start_job(context, check=False):
                '--blender-ocio', str(Path(bpy.utils.resource_path('LOCAL')) / 'datafiles/colormanagement/config.ocio'),
                '--model-source', str(model_source),
                '--out', str(directory), '--strength', str(settings.strength)]
+    if node:
+        command += ['--neural-node', node.name]
     if checkpoint:
         command += ['--checkpoint', str(checkpoint)]
     if identity:
@@ -105,6 +113,9 @@ def start_job(context, check=False):
         (directory / 'launch.json').write_text(json.dumps(
             {'scene': scene.name, 'frame': scene.frame_current, 'subframe': scene.frame_subframe,
              'open_file': bpy.data.filepath, 'snapshot': str(snapshot),
+             'neural_node': node.name if node else None,
+             'selected_checkpoint': str(checkpoint) if checkpoint else None,
+             'model_source': str(model_source),
              'capture_boundary': 'Render Layers Combined HDR before original compositor'},
             indent=2, ensure_ascii=False), encoding='utf-8')
     _job = Job(command, directory, 'check' if check else 'render')
@@ -142,6 +153,57 @@ class NRBSettings(bpy.types.PropertyGroup):
                             description='Scale the HDR residual; zero skips model inference')
     eager: BoolProperty(name='Eager inference', default=False,
                         description='Use ordinary PyTorch execution instead of CUDA Graph')
+
+
+class NRB_OT_add_node(bpy.types.Operator):
+    bl_idname = 'nrb.add_node'
+    bl_label = 'Neural Render Bridge'
+    bl_description = 'Insert the bridge between renderer Image and existing postprocessing'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        graph = context.scene.compositing_node_group
+        if not graph:
+            self.report({'ERROR'}, 'Enable the active scene compositor first')
+            return {'CANCELLED'}
+        if any(n.bl_idname == NODE_ID for n in graph.nodes):
+            self.report({'ERROR'}, 'This compositor already contains a Neural Render Bridge node')
+            return {'CANCELLED'}
+        sources = [n for n in graph.nodes if n.bl_idname == 'CompositorNodeRLayers']
+        if len(sources) != 1:
+            self.report({'ERROR'}, 'Exactly one Render Layers node is required')
+            return {'CANCELLED'}
+        raw = sources[0]
+        targets = [link.to_socket for link in graph.links if link.from_node == raw and link.from_socket.name == 'Image']
+        if not targets:
+            self.report({'ERROR'}, 'Connect Render Layers Image to the compositor first')
+            return {'CANCELLED'}
+        node = graph.nodes.new(NODE_ID)
+        node.location = (raw.location.x + raw.width + 60, raw.location.y)
+        prefs = preferences(context)
+        node.model_source = prefs.model_source
+        if prefs.checkpoint:
+            checkpoint = resolved(prefs.checkpoint)
+            node.model_directory = str(checkpoint.parent)
+            from .runtime.bridge_node import checkpoint_items
+            if checkpoint.name in [item[0] for item in checkpoint_items(node, context)]:
+                node.model_choice = checkpoint.name
+        settings = context.scene.neural_render_bridge
+        node.mode, node.strength, node.eager = settings.mode, settings.strength, settings.eager
+        graph.links.new(raw.outputs['Image'], node.inputs['Image'])
+        for target in targets:
+            graph.links.new(node.outputs['Image'], target)
+        for n in graph.nodes:
+            n.select = n == node
+        graph.nodes.active = node
+        self.report({'INFO'}, 'Configure the model folder and checkpoint in the new node')
+        return {'FINISHED'}
+
+
+def node_add_menu(self, context):
+    space = context.space_data
+    if space and space.type == 'NODE_EDITOR' and space.tree_type == 'CompositorNodeTree':
+        self.layout.operator('nrb.add_node', icon='NODETREE')
 
 
 class NRB_OT_render(bpy.types.Operator):
@@ -242,10 +304,16 @@ class NRB_PT_render(bpy.types.Panel):
         running = _job is not None and _job.status == 'RUNNING'
         controls = layout.column()
         controls.enabled = not running
-        controls.prop(settings, 'mode')
-        if settings.mode == 'NEURAL':
-            controls.prop(settings, 'strength')
-            controls.prop(settings, 'eager')
+        graph = context.scene.compositing_node_group
+        nodes = [n for n in graph.nodes if n.bl_idname == NODE_ID] if graph else []
+        if nodes:
+            controls.label(text='Model and settings: ' + nodes[0].name)
+        else:
+            controls.prop(settings, 'mode')
+            if settings.mode == 'NEURAL':
+                controls.prop(settings, 'strength')
+                controls.prop(settings, 'eager')
+            controls.operator('nrb.add_node', text='Add Model Selection Node', icon='NODETREE')
         controls.operator('nrb.render', icon='RENDER_STILL')
         controls.operator('nrb.check_environment')
         if _job:
@@ -262,7 +330,7 @@ class NRB_PT_render(bpy.types.Panel):
         layout.label(text='Native HDR → PyTorch → Original compositor')
 
 
-CLASSES = (NRBPreferences, NRBSettings, NRB_OT_render, NRB_OT_check, NRB_OT_cancel,
+CLASSES = (NRBPreferences, NRBSettings, NRBCompositorNode, NRB_OT_add_node, NRB_OT_render, NRB_OT_check, NRB_OT_cancel,
            NRB_OT_open_directory, NRB_OT_load_result, NRB_PT_render)
 
 
@@ -270,6 +338,7 @@ def register():
     for cls in CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.Scene.neural_render_bridge = PointerProperty(type=NRBSettings)
+    bpy.types.NODE_MT_add.append(node_add_menu)
 
 
 def unregister():
@@ -278,6 +347,7 @@ def unregister():
         _job.cancel()
     if bpy.app.timers.is_registered(poll_job):
         bpy.app.timers.unregister(poll_job)
+    bpy.types.NODE_MT_add.remove(node_add_menu)
     del bpy.types.Scene.neural_render_bridge
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)

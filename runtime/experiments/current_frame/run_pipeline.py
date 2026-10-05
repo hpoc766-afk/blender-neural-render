@@ -25,8 +25,9 @@ LINEAR_REFERENCE_BUDGET = 1e-6  # Independent of the old failed comparison.
 
 
 def blender_stage(source, out, script, phase, log):
-    command = [str(BLENDER), '--background', str(source), '--python-exit-code', '1',
-               '--python', str(HERE / script), '--', str(out), phase]
+    bootstrap = HERE.parents[1] / 'blender_stage.py'
+    command = [str(BLENDER), '--background', '--python-exit-code', '1',
+               '--python', str(bootstrap), '--', str(source), str(HERE / script), str(out), phase]
     with (out / log).open('w', encoding='utf-8') as stream:
         subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT, check=True)
 
@@ -135,7 +136,8 @@ def run(args):
     source_before = sha(source)
     started = time.perf_counter()
     write_json(out / 'request.json', {'source': str(source), 'scene': args.scene,
-                                    'frame': args.frame, 'view_layer': args.view_layer})
+                                    'frame': args.frame, 'view_layer': args.view_layer,
+                                    'neural_node': getattr(args, 'neural_node', None)})
     print('PREFLIGHT_START', source, flush=True)
     blender_stage(source, out, 'capture_raw.py', 'inspect', 'preflight.log')
     identity = json.loads((out / 'preflight.json').read_text(encoding='utf-8'))
@@ -203,6 +205,7 @@ def run(args):
             neural_rgba[..., :3] = restored
             inference_stats.update(restoration)
             inference_stats['checkpoint_sha256'] = sha(checkpoint)
+            inference_stats['checkpoint_path'] = str(checkpoint.resolve())
             inference_stats['model_kind'] = 'static_approximation'
             np.save(out / 'model_input.npy', model_source)
             np.save(out / 'model_output.npy', model_output)
@@ -241,6 +244,7 @@ def main():
     parser.add_argument('--scene')
     parser.add_argument('--frame', type=int)
     parser.add_argument('--view-layer')
+    parser.add_argument('--neural-node')
     parser.add_argument('--reuse-raw', action='store_true')
     parser.add_argument('--eager', action='store_true')
     parser.add_argument('--strength', type=float, default=1.0)
