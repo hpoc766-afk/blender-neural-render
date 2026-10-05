@@ -1,0 +1,45 @@
+{
+  "files": [
+    {
+      "path": "experiments/current_frame/run_pipeline.py",
+      "source_sha256": "e6e239df33d899e39dfd6893c1d8f6d32536e7c9e01683d30c614b849da715a4"
+    },
+    {
+      "path": "experiments/current_frame/capture_raw.py",
+      "source_sha256": "c40cf9f08168350d684707e30e19725960c2e700484e1bcb46ad92491153f01a"
+    },
+    {
+      "path": "experiments/current_frame/post_stage.py",
+      "source_sha256": "5ae2f2b32e43a2c5bc9d0aa3bddb4775d7125bb36a7c60923d80311dd260591c"
+    },
+    {
+      "path": "experiments/current_frame/blender_contract.py",
+      "source_sha256": "394694180b9dd754e95b376fc9d530e9a212bbfe1264e042f1552befa552b21f"
+    },
+    {
+      "path": "experiments/current_frame/frame_contract.py",
+      "source_sha256": "f304aeaba8c51c3cb6932d399941db2151c0125525008db34cc71312471af21d"
+    },
+    {
+      "path": "src/dlss5_pipeline/color.py",
+      "source_sha256": "910358119492520e558d591ffe2421e092d8705010c9c86161d9f27edaff74bf"
+    },
+    {
+      "path": "src/dlss5_pipeline/godot_adapter.py",
+      "source_sha256": "9fd63549be36763a9f561364d3f9ca32f5b100f9fbed95b33d8a1c7dbb46cc83"
+    },
+    {
+      "path": "src/dlss5_pipeline/model.py",
+      "source_sha256": "9995e4178853c23d765dbfb87d17713bef4f3ce3029f3be042fd96f0c23c178d"
+    },
+    {
+      "path": "src/dlss5_pipeline/pipeline.py",
+      "source_sha256": "d8f8058e8b99e6f46f06e2d6f44621d141c7d7a448398e2d24b674a38341a63e"
+    },
+    {
+      "path": "src/dlss5_pipeline/__init__.py",
+      "source_sha256": "949976da17e4999de96aa9bdc151a9e37fd3d75d06760f19d6ff5c13f39aa068"
+    }
+  ],
+  "runner_configuration_change": "checkpoint chosen through an explicit argument; capture and model code unchanged"
+}

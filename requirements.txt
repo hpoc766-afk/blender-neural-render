@@ -1,0 +1,6 @@
+# Dependencies for external Python, not Blender's embedded interpreter.
+# Select a CUDA-enabled PyTorch build for the local GPU and driver.
+torch>=2.7
+numpy>=1.22
+Pillow>=10
+OpenEXR>=3.5.2
